@@ -13,7 +13,11 @@ pub fn disassemble_chip8(code_buffer: &Vec<u8>, mut program_counter: usize) -> u
         0x0 => match current_op_code {
             0xe0 => String::from("CLS"),
             0xee => String::from("RET"),
-            _ => format!("not impl"),
+            _ => format!(
+                "CALL \t${:02x}{:02x}",
+                code_buffer[program_counter] & 0xf,
+                code_buffer[program_counter + 1]
+            ),
         },
         0x1 => {
             format!(
@@ -148,6 +152,18 @@ pub fn disassemble_chip8(code_buffer: &Vec<u8>, mut program_counter: usize) -> u
             0x9e => format!("SKP\tV{:x}", code_buffer[program_counter] & 0xf),
             0xa1 => format!("SKNP\tV{:x}", code_buffer[program_counter] & 0xf),
             _ => format!(""),
+        },
+        0xf => match code_buffer[program_counter + 1] {
+            0x07 => format!("MOV\tV{:x}, DT", code_buffer[program_counter] & 0xf),
+            0x0a => format!("MVI\tV{:x}, K", code_buffer[program_counter] & 0xf),
+            0x15 => format!("DELAY\tDT, V{:x}", code_buffer[program_counter] & 0xf),
+            0x18 => format!("SOUND\tST, V{:x}", code_buffer[program_counter] & 0xf),
+            0x1e => format!("ADI\tI, V{:x}", code_buffer[program_counter] & 0xf),
+            0x29 => format!("SPRITECHAR\tI, V{:x}", code_buffer[program_counter] & 0xf),
+            0x33 => format!("MOVBCD\t(I), V{:x}", code_buffer[program_counter] & 0xf),
+            0x55 => format!("MVM\t(I), V0-V{:x}", code_buffer[program_counter] & 0xf),
+            0x65 => format!("MVM\tV0-v{:x}", code_buffer[program_counter] & 0xf),
+            _ => format!("unknown"),
         },
         _ => format!("not impl"),
     };
