@@ -8,7 +8,7 @@ pub struct chip8 {
     index: u16,
     pc: u16,
     stack: [u16; 16],
-    sp: u8,
+    sp: u16,
     delay_timer: u8,
     sound_timer: u8,
     keypad: [bool; 16],
@@ -36,14 +36,14 @@ const FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
-struct OpCode {
-    higher_byte: u8,
-    lower_byte: u8,
+pub struct OpCode {
+    pub higher_byte: u8,
+    pub lower_byte: u8,
 }
 
 impl OpCode {
     pub fn get_nnn(&self) -> u16 {
-        let full_op_code: u16 = (self.higher_byte << 8 | self.lower_byte) as u16;
+        let full_op_code: u16 = ((self.higher_byte as u16) << 8) | self.lower_byte as u16;
         let nnn = full_op_code & 0xFFF;
         nnn as u16
     }
@@ -85,12 +85,23 @@ impl chip8 {
     }
 
     fn load_fontset(&mut self) {
-        self.memory[80..(80 + 80)].copy_from_slice(&FONTSET);
+        self.memory[..80].copy_from_slice(&FONTSET);
     }
     pub fn load_rom(&mut self, path: &str) {
         let rom_buffer = file_utils::read_file_to_buffer(path);
+        println!("{:?}", rom_buffer);
         let rombuffer_length = rom_buffer.len();
         self.memory[0x200..(0x200 + rombuffer_length)].copy_from_slice(&rom_buffer);
+    }
+    pub fn emulate_cycle(&mut self) {
+        let op_code = self.fetch();
+        self.decode_and_execute(op_code);
+    }
+    pub fn keypress(&mut self, key: usize, value: bool) {
+        self.keypad[key] = value;
+    }
+    pub fn get_display(&self) -> &[bool] {
+        &self.video
     }
     fn fetch(&mut self) -> OpCode {
         let higher_byte = self.memory[self.pc as usize];
@@ -118,7 +129,10 @@ impl chip8 {
                         self.pc = self.stack[self.sp as usize];
                     }
                     _ => {
-                        println!("Unknown opcode: {:X}", op_code.higher_byte);
+                        println!(
+                            "Unknown opcode: {:02X}{:02X}",
+                            op_code.higher_byte, op_code.lower_byte
+                        );
                     }
                 }
             }
@@ -166,7 +180,7 @@ impl chip8 {
             0x7 => {
                 let vx: u8 = op_code.higher_byte & 0xF;
                 let value = op_code.lower_byte;
-                self.registers[vx as usize] += value;
+                self.registers[vx as usize] = self.registers[vx as usize].wrapping_add(value);
             }
             //set Vx = Vy
             0x8 => {
@@ -199,25 +213,21 @@ impl chip8 {
                     0x4 => {
                         let vx: u8 = op_code.higher_byte & 0xF;
                         let vy: u8 = op_code.lower_byte >> 4;
-                        let result =
-                            self.registers[vx as usize] as u16 + self.registers[vy as usize] as u16;
-                        if result > 255 {
-                            self.registers[0xF] = 1;
-                        } else {
-                            self.registers[0xF] = 0;
-                        }
-                        self.registers[vx as usize] = (result & 0xFF) as u8;
+                        let (new_vx_value, carry) = self.registers[vx as usize]
+                            .overflowing_add(self.registers[vy as usize]);
+                        let new_fv = if carry { 1 } else { 0 };
+                        self.registers[vx as usize] = new_vx_value;
+                        self.registers[0xF] = new_fv;
                     }
                     //set Vx = Vx - Vy, set VF = NOT borrow
                     0x5 => {
                         let vx: u8 = op_code.higher_byte & 0xF;
                         let vy: u8 = op_code.lower_byte >> 4;
-                        if self.registers[vx as usize] > self.registers[vy as usize] {
-                            self.registers[0xF] = 1;
-                        } else {
-                            self.registers[0xF] = 0;
-                        }
-                        self.registers[vx as usize] -= self.registers[vy as usize];
+                        let (new_vx_value, borrow) = self.registers[vx as usize]
+                            .overflowing_sub(self.registers[vy as usize]);
+                        let new_fv = if borrow { 0 } else { 1 };
+                        self.registers[vx as usize] = new_vx_value;
+                        self.registers[0xF] = new_fv;
                     }
                     //set Vx = Vx SHR 1
                     0x6 => {
@@ -229,13 +239,11 @@ impl chip8 {
                     0x7 => {
                         let vx: u8 = op_code.higher_byte & 0xF;
                         let vy: u8 = op_code.lower_byte >> 4;
-                        if self.registers[vy as usize] > self.registers[vx as usize] {
-                            self.registers[0xF] = 1;
-                        } else {
-                            self.registers[0xF] = 0;
-                        }
-                        self.registers[vx as usize] =
-                            self.registers[vy as usize] - self.registers[vx as usize];
+                        let (new_vy_value, borrow) = self.registers[vy as usize]
+                            .overflowing_sub(self.registers[vx as usize]);
+                        let new_fv = if borrow { 0 } else { 1 };
+                        self.registers[vy as usize] = new_vy_value;
+                        self.registers[0xF] = new_fv;
                     }
                     //set Vx = Vx SHL 1
                     0xE => {
@@ -244,7 +252,10 @@ impl chip8 {
                         self.registers[vx as usize] <<= 1;
                     }
                     _ => {
-                        println!("Unknown opcode: 0x{:X}", op_code.higher_byte);
+                        println!(
+                            "Unknown opcode: {:02X}{:02X}",
+                            op_code.higher_byte, op_code.lower_byte
+                        );
                     }
                 }
             }
@@ -331,6 +342,11 @@ impl chip8 {
                 };
             }
             0xF => match op_code.lower_byte {
+                //set Vx = delay timer value
+                0x07 => {
+                    let vx: u8 = op_code.higher_byte & 0xF;
+                    self.registers[vx as usize] = self.delay_timer;
+                }
                 //wait until key is pressed and set Vx = key
                 0x0A => {
                     let vx: u8 = op_code.higher_byte & 0xF;
@@ -404,7 +420,10 @@ impl chip8 {
                 }
             },
             _ => {
-                println!("Unknown opcode: {:X}", op_code.higher_byte);
+                println!(
+                    "Unknown opcode: {:02X}{:02X}",
+                    op_code.higher_byte, op_code.lower_byte
+                );
             }
         }
         //DECREMENT TIMERS
