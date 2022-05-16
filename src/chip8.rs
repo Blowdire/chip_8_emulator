@@ -299,20 +299,22 @@ impl chip8 {
                     for col in 0..8 {
                         //get sprite pixel using current row and mask 10000000 shifted by col
                         let sprite_pixel: u8 = sprite_byte & (0x80 >> col);
-
+                        println!("Binary: {:b}", sprite_pixel);
                         //get video pixel using x and y positions
-                        let video_pixel: &mut u8 = &mut self.memory[((y_position + row as u16)
+                        let video_pixel_index = (((y_position + row as u16) % VIDEO_HEIGHT)
                             * VIDEO_WIDTH
-                            + (x_position + col))
-                            as usize];
-                        if sprite_pixel == 0xFF {
-                            if *video_pixel == 0xFF {
+                            + ((x_position + col) % VIDEO_WIDTH))
+                            as usize;
+
+                        if sprite_pixel == 0b10000000 {
+                            if self.video[video_pixel_index] == true {
                                 self.registers[0xF] = 1;
                             }
-                            *video_pixel ^= 0xFF;
+                            self.video[video_pixel_index] ^= true;
                         }
                     }
                 }
+                // println!("Result video memory: {:?}", self.video);
             }
             //skip if key with value of Vx is pressed
             0xE => {
@@ -426,6 +428,8 @@ impl chip8 {
                 );
             }
         }
+    }
+    pub fn tick_timers(&mut self) {
         //DECREMENT TIMERS
         if self.delay_timer > 0 {
             self.delay_timer -= 1;

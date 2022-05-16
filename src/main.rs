@@ -1,22 +1,23 @@
 pub mod chip8;
 pub mod disassembler;
 pub mod file_utils;
-use std::env;
-
 use chip8::OpCode;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
-use sdl2::video::Window;
+use sdl2::video::{self, Window};
+use std::env;
+use std::time::{Duration, SystemTime};
 //const variables definition
 const SCALE: u32 = 10 as u32;
 const SCREEN_WIDTH: usize = 64;
 const SCREEN_HEIGHT: usize = 32;
 const WINDOW_WIDTH: u32 = (SCREEN_WIDTH as u32) * SCALE;
 const WINDOW_HEIGHT: u32 = (SCREEN_HEIGHT as u32) * SCALE;
-const TICKS_PER_FRAME: usize = 10;
+const FRAME_TIME: u128 = 1000 / 60;
+const TICKS_PER_FRAME: usize = 15;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -28,12 +29,13 @@ fn main() {
     //setup sdl
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    video_subsystem.gl_attr().set_double_buffer(true);
     let window = video_subsystem
         .window("Chip 8 Emu", WINDOW_WIDTH, WINDOW_HEIGHT)
         .position_centered()
         .build()
         .unwrap();
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    let mut canvas = window.into_canvas().accelerated().build().unwrap();
     canvas.clear();
     canvas.present();
 
@@ -45,6 +47,8 @@ fn main() {
     chip8.load_rom(&args[1]);
     //run emulator
     'running: loop {
+        let frame_start_time = SystemTime::now();
+        // let initial_cycle_time = SystemTime::now();
         for evt in event_pump.poll_event() {
             match evt {
                 Event::Quit { .. }
@@ -71,11 +75,30 @@ fn main() {
                 _ => {}
             }
         }
+        // let final_cycle_time = SystemTime::now();
+        // let diff = initial_cycle_time.duration_since(final_cycle_time).unwrap();
+        // if diff.as_millis() < FRAME_TIME as u128 {
+        //     let difference: u64 = (FRAME_TIME - diff.as_millis()) as u64;
+        //     std::thread::sleep(Duration::from_millis(difference));
+        // }
         for _ in 0..TICKS_PER_FRAME {
             chip8.emulate_cycle();
         }
+        chip8.tick_timers();
         //draw to window
-        draw_screen(&chip8, &mut canvas)
+        draw_screen(&chip8, &mut canvas);
+        let frame_end_time = SystemTime::now();
+        let dif = frame_end_time
+            .duration_since(frame_start_time)
+            .unwrap()
+            .as_millis();
+        if dif < FRAME_TIME {
+            // std::thread::sleep(Duration::from_millis((FRAME_TIME - dif) as u64));
+            sdl_context
+                .timer()
+                .unwrap()
+                .delay(FRAME_TIME as u32 - dif as u32);
+        }
     }
 }
 // fn main() {
