@@ -17,9 +17,10 @@ const SCREEN_HEIGHT: usize = 32;
 const WINDOW_WIDTH: u32 = (SCREEN_WIDTH as u32) * SCALE;
 const WINDOW_HEIGHT: u32 = (SCREEN_HEIGHT as u32) * SCALE;
 const FRAME_TIME: u128 = 1000 / 60;
-const TICKS_PER_FRAME: usize = 15;
+const TICKS_PER_FRAME: usize = 10;
 
 fn main() {
+    println!("{}", std::env::current_dir().unwrap().to_str().unwrap());
     let args: Vec<_> = env::args().collect();
     if args.len() != 2 {
         println!("Help: cargo run path/to/game");

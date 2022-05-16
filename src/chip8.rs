@@ -299,14 +299,14 @@ impl chip8 {
                     for col in 0..8 {
                         //get sprite pixel using current row and mask 10000000 shifted by col
                         let sprite_pixel: u8 = sprite_byte & (0x80 >> col);
-                        println!("Binary: {:b}", sprite_pixel);
+                        println!("Binary: {:08b}", sprite_pixel);
                         //get video pixel using x and y positions
                         let video_pixel_index = (((y_position + row as u16) % VIDEO_HEIGHT)
                             * VIDEO_WIDTH
                             + ((x_position + col) % VIDEO_WIDTH))
                             as usize;
 
-                        if sprite_pixel == 0b10000000 {
+                        if sprite_pixel != 0b00000000 {
                             if self.video[video_pixel_index] == true {
                                 self.registers[0xF] = 1;
                             }
